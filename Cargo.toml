@@ -9,3 +9,4 @@ edition = "2018"
 [dependencies]
 xosd-rs = "0.2.0"
 reqwest = "*"
+config = { default-features = false, version = "0.10.1", features = ["toml"] }
