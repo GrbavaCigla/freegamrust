@@ -8,5 +8,6 @@ edition = "2018"
 
 [dependencies]
 xosd-rs = "0.2.0"
-reqwest = "*"
+reqwest = { version = "*", features = ["blocking"] }
 config = { default-features = false, version = "0.10.1", features = ["toml"] }
+serde_json = "1.0"
