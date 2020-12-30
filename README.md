@@ -35,6 +35,7 @@ Start `freegamrust` on WM startup, for example in `.xinitrc`
 - Add color in config (not sure if xosd has that)
 - Add support for more sources
 - Add support for thread skipping
+- Add signal for hiding
 
 ## License
 Project is licensed under GPLv3
