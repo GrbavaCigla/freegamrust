@@ -1,7 +1,9 @@
+use serde_json::Value;
 use std::error::Error;
 use std::result::Result;
 use xosd_rs::{Command, HorizontalAlign, VerticalAlign, Xosd};
-use serde_json::Value;
+use std::thread::sleep;
+use std::time::Duration;
 
 trait XosdDrawLines {
     fn draw_lines(
@@ -21,7 +23,6 @@ impl XosdDrawLines for Xosd {
         vertical_offset: i32,
         alignment: (VerticalAlign, HorizontalAlign),
     ) -> xosd_rs::Result<()> {
-
         self.set_horizontal_offset(horizontal_offset)?;
         self.set_vertical_offset(vertical_offset)?;
         self.set_vertical_align(alignment.0)?;
@@ -54,7 +55,6 @@ fn decode_alignment(number: u8) -> (VerticalAlign, HorizontalAlign) {
 
 fn fetch_games() -> Result<Vec<String>, Box<dyn Error>> {
     let response = reqwest::blocking::get("https://reddit.com/r/FreeGameFindings.json")?.text()?;
-    
     let json_val: Value = serde_json::from_str(&response)?;
 
     let mut res = vec![];
@@ -62,7 +62,7 @@ fn fetch_games() -> Result<Vec<String>, Box<dyn Error>> {
     for i in 0..10 {
         let cur_str = match &json_val["data"]["children"][i]["data"]["title"] {
             Value::String(s) => s,
-            _ => continue
+            _ => continue,
         };
 
         res.push(cur_str.to_owned());
@@ -74,22 +74,28 @@ fn fetch_games() -> Result<Vec<String>, Box<dyn Error>> {
 fn main() -> Result<(), Box<dyn Error>> {
     let mut settings = config::Config::default();
 
-    let v = fetch_games()?;
-    let v: Vec<&str> = v.iter().map(|s| &**s).collect();
+    let mut settings_dir = std::env::var("HOME").unwrap();
+    settings_dir.push_str("/.config/freegamrust/config.toml");
 
-    settings.merge(config::File::with_name("res/config.toml"))?;
+    settings.merge(config::File::with_name(&settings_dir))?;
 
     let horiz_offset = settings.get_int("horizontal-offset")? as i32;
     let vert_offset = settings.get_int("vertical-offset")? as i32;
     let alignment = decode_alignment(settings.get_int("alignment")? as u8);
+    let refresh_min = settings.get_int("refresh-min")? as u64;
 
-    let mut osd = Xosd::new(v.len() as i32)?;
+    loop {
+        let v = fetch_games()?;
+        let v: Vec<&str> = v.iter().map(|s| &**s).collect();
 
-    osd.draw_lines(&v, horiz_offset, vert_offset, alignment)?;
+        let mut osd = Xosd::new(v.len() as i32)?;
 
-    if osd.onscreen()? {
-        osd.wait_until_no_display()?;
+        osd.draw_lines(&v, horiz_offset, vert_offset, alignment)?;
+
+        if osd.onscreen()? {
+            osd.wait_until_no_display()?;
+        }
+
+        sleep(Duration::from_secs(refresh_min * 60));
     }
-
-    Ok(())
 }
