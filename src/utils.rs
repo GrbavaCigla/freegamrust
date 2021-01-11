@@ -15,7 +15,10 @@ atom_manager! {
     }
 }
 
-pub fn choose_visual(conn: &impl Connection, screen_num: usize) -> Result<(u8, Visualid), ReplyError> {
+pub fn choose_visual(
+    conn: &impl Connection,
+    screen_num: usize,
+) -> Result<(u8, Visualid), ReplyError> {
     let depth = 32;
     let screen = &conn.setup().roots[screen_num];
 
@@ -53,7 +56,6 @@ pub fn choose_visual(conn: &impl Connection, screen_num: usize) -> Result<(u8, V
     Ok((screen.root_depth, screen.root_visual))
 }
 
-
 pub fn composite_manager_running(
     conn: &impl Connection,
     screen_num: usize,
@@ -87,7 +89,6 @@ where
         .border_pixel(screen.black_pixel)
         .override_redirect(1)
         .colormap(colormap);
-    
     conn.create_window(
         depth,
         window,
@@ -101,7 +102,6 @@ where
         visual_id,
         &win_aux,
     )?;
-    
     conn.free_colormap(colormap)?;
 
     let title = "Simple Window";

@@ -1,11 +1,11 @@
+use regex::Regex;
 use serde_json::Value;
 use std::error::Error;
 use std::result::Result;
 use std::time::Duration;
+use std::time::{SystemTime, UNIX_EPOCH};
 use x11rb::connection::Connection;
 use x11rb::protocol::xproto::*;
-use std::time::{SystemTime, UNIX_EPOCH};
-use regex::Regex;
 
 mod config;
 mod utils;
@@ -37,7 +37,7 @@ fn fetch_games() -> Result<Vec<String>, Box<dyn Error>> {
 fn main() -> Result<(), Box<dyn Error>> {
     // Config
     let settings = config::get_settings()?;
-    let (horiz_offset,vert_offset,refresh_min) = config::get_settings_values(&settings)?;
+    let (horiz_offset, vert_offset, refresh_min) = config::get_settings_values(&settings)?;
     let refresh_min = Duration::from_secs(refresh_min * 60);
 
     // Xorg stuff
@@ -46,7 +46,15 @@ fn main() -> Result<(), Box<dyn Error>> {
     let atoms = AtomCollection::new(&conn)?.reply()?;
     let screen = &conn.setup().roots[screen_num];
 
-    let win_id = utils::create_window(&conn, screen, &atoms, (horiz_offset, vert_offset), (400, 14*8 + 24), depth, visualid)?;
+    let win_id = utils::create_window(
+        &conn,
+        screen,
+        &atoms,
+        (horiz_offset, vert_offset),
+        (400, 14 * 8 + 24),
+        depth,
+        visualid,
+    )?;
 
     let transparency = composite_manager_running(&conn, screen_num)?;
     if !transparency {
@@ -64,7 +72,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         text_draw(&conn, screen, win_id, 10, 10 + 14 * (i + 1) as i16, item)?;
     }
     conn.flush()?;
-
 
     loop {
         let event = conn.wait_for_event()?;
