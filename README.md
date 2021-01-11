@@ -1,4 +1,4 @@
-# freegamrust
+# freegamrust ![Rust](https://github.com/GrbavaCigla/freegamrust/workflows/Rust/badge.svg)
 
 Conkly like program to fetch free games and display it with xosd. Made in rust.
 
