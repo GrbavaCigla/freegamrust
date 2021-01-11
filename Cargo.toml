@@ -1,13 +1,13 @@
 [package]
-name = "freegamrust"
-version = "0.1.0"
 authors = ["Aleksa Ognjanovic <alexa.ognjanovic@protonmail.com>"]
 edition = "2018"
+name = "freegamrust"
+version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-xosd-rs = "0.2.0"
-reqwest = { version = "*", features = ["blocking"] }
-config = { default-features = false, version = "0.10.1", features = ["toml"] }
+config = {default-features = false, version = "0.10.1", features = ["toml"]}
+reqwest = {version = "0.11.0", features = ["blocking"]}
 serde_json = "1.0"
+x11rb = {version = "0.8.0", features = ["allow-unsafe-code", "render"]}

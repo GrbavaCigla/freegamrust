@@ -1,57 +1,16 @@
 use serde_json::Value;
 use std::error::Error;
 use std::result::Result;
-use xosd_rs::{Command, HorizontalAlign, VerticalAlign, Xosd};
 use std::thread::sleep;
 use std::time::Duration;
+use x11rb::connection::Connection;
+use x11rb::protocol::xproto::*;
+use x11rb::protocol::Event;
+use std::time::{SystemTime, UNIX_EPOCH};
 
-trait XosdDrawLines {
-    fn draw_lines(
-        &mut self,
-        lines: &Vec<&str>,
-        horizontal_offset: i32,
-        vertical_offset: i32,
-        alignment: (VerticalAlign, HorizontalAlign),
-    ) -> xosd_rs::Result<()>;
-}
-
-impl XosdDrawLines for Xosd {
-    fn draw_lines(
-        &mut self,
-        lines: &Vec<&str>,
-        horizontal_offset: i32,
-        vertical_offset: i32,
-        alignment: (VerticalAlign, HorizontalAlign),
-    ) -> xosd_rs::Result<()> {
-        self.set_horizontal_offset(horizontal_offset)?;
-        self.set_vertical_offset(vertical_offset)?;
-        self.set_vertical_align(alignment.0)?;
-        self.set_horizontal_align(alignment.1)?;
-
-        for (i, line) in lines.iter().enumerate() {
-            self.display(i as i32, Command::string(line)?)?;
-        }
-        Ok(())
-    }
-}
-
-fn decode_alignment(number: u8) -> (VerticalAlign, HorizontalAlign) {
-    let vert = number / 3;
-    let horiz = number % 3;
-
-    let vert = [
-        VerticalAlign::Top,
-        VerticalAlign::Center,
-        VerticalAlign::Bottom,
-    ][vert as usize];
-    let horiz = [
-        HorizontalAlign::Left,
-        HorizontalAlign::Center,
-        HorizontalAlign::Right,
-    ][horiz as usize];
-
-    (vert, horiz)
-}
+mod config;
+mod utils;
+use utils::*;
 
 fn fetch_games() -> Result<Vec<String>, Box<dyn Error>> {
     let response = reqwest::blocking::get("https://reddit.com/r/FreeGameFindings.json")?.text()?;
@@ -72,30 +31,47 @@ fn fetch_games() -> Result<Vec<String>, Box<dyn Error>> {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let mut settings = config::Config::default();
+    // Config
+    let settings = config::get_settings()?;
+    let (horiz_offset,vert_offset,refresh_min) = config::get_settings_values(&settings)?;
+    let refresh_min = Duration::from_secs(refresh_min * 60);
 
-    let mut settings_dir = std::env::var("HOME").unwrap();
-    settings_dir.push_str("/.config/freegamrust/config.toml");
+    // Xorg stuff
+    let (conn, screen_num) = x11rb::connect(None)?;
+    let (depth, visualid) = choose_visual(&conn, screen_num)?;
+    let atoms = AtomCollection::new(&conn)?.reply()?;
+    let screen = &conn.setup().roots[screen_num];
 
-    settings.merge(config::File::with_name(&settings_dir))?;
+    let win_id = utils::create_window(&conn, screen, &atoms, (horiz_offset, vert_offset), (400, 170), depth, visualid)?;
 
-    let horiz_offset = settings.get_int("horizontal-offset")? as i32;
-    let vert_offset = settings.get_int("vertical-offset")? as i32;
-    let alignment = decode_alignment(settings.get_int("alignment")? as u8);
-    let refresh_min = settings.get_int("refresh-min")? as u64;
+    let transparency = composite_manager_running(&conn, screen_num)?;
+    if !transparency {
+        eprintln!("Compositor is required to use transparency!");
+    }
+
+    conn.map_window(win_id)?;
+
+    conn.flush()?;
+
+    let mut start_time = SystemTime::now().duration_since(UNIX_EPOCH)?;
+    let mut v = fetch_games()?;
 
     loop {
-        let v = fetch_games()?;
-        let v: Vec<&str> = v.iter().map(|s| &**s).collect();
+        let event = conn.wait_for_event()?;
 
-        let mut osd = Xosd::new(v.len() as i32)?;
+        println!("Event: {:?}", event);
 
-        osd.draw_lines(&v, horiz_offset, vert_offset, alignment)?;
-
-        if osd.onscreen()? {
-            osd.wait_until_no_display()?;
+        if SystemTime::now().duration_since(UNIX_EPOCH)? - start_time >= refresh_min {
+            start_time = SystemTime::now().duration_since(UNIX_EPOCH)?;
+            v = fetch_games()?;
         }
 
-        sleep(Duration::from_secs(refresh_min * 60));
+        for (i, item) in v.iter().enumerate() {
+            text_draw(&conn, screen, win_id, 10, 10 + 14 * (i + 1) as i16, item)?;
+            println!("{}", 10 + 14 * (i + 1) as i16);
+        }
+
+        conn.flush()?;
+        // sleep(Duration::from_secs(refresh_min * 60));
     }
 }
