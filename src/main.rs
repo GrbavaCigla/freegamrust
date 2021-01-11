@@ -1,18 +1,19 @@
 use serde_json::Value;
 use std::error::Error;
 use std::result::Result;
-use std::thread::sleep;
 use std::time::Duration;
 use x11rb::connection::Connection;
 use x11rb::protocol::xproto::*;
-use x11rb::protocol::Event;
 use std::time::{SystemTime, UNIX_EPOCH};
+use regex::Regex;
 
 mod config;
 mod utils;
 use utils::*;
 
 fn fetch_games() -> Result<Vec<String>, Box<dyn Error>> {
+    let reg = Regex::new(r"\[.+\].*\(.+\).+")?;
+
     let response = reqwest::blocking::get("https://reddit.com/r/FreeGameFindings.json")?.text()?;
     let json_val: Value = serde_json::from_str(&response)?;
 
@@ -24,7 +25,10 @@ fn fetch_games() -> Result<Vec<String>, Box<dyn Error>> {
             _ => continue,
         };
 
-        res.push(cur_str.to_owned());
+        if reg.is_match(cur_str) {
+            println!("MAATCH");
+            res.push(cur_str.to_owned());
+        }
     }
 
     Ok(res)
@@ -42,7 +46,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let atoms = AtomCollection::new(&conn)?.reply()?;
     let screen = &conn.setup().roots[screen_num];
 
-    let win_id = utils::create_window(&conn, screen, &atoms, (horiz_offset, vert_offset), (400, 170), depth, visualid)?;
+    let win_id = utils::create_window(&conn, screen, &atoms, (horiz_offset, vert_offset), (400, 14*8 + 24), depth, visualid)?;
 
     let transparency = composite_manager_running(&conn, screen_num)?;
     if !transparency {
@@ -56,6 +60,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut start_time = SystemTime::now().duration_since(UNIX_EPOCH)?;
     let mut v = fetch_games()?;
 
+    for (i, item) in v.iter().enumerate() {
+        text_draw(&conn, screen, win_id, 10, 10 + 14 * (i + 1) as i16, item)?;
+    }
+    conn.flush()?;
+
+
     loop {
         let event = conn.wait_for_event()?;
 
@@ -64,14 +74,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         if SystemTime::now().duration_since(UNIX_EPOCH)? - start_time >= refresh_min {
             start_time = SystemTime::now().duration_since(UNIX_EPOCH)?;
             v = fetch_games()?;
-        }
+            println!("fetched");
 
-        for (i, item) in v.iter().enumerate() {
-            text_draw(&conn, screen, win_id, 10, 10 + 14 * (i + 1) as i16, item)?;
-            println!("{}", 10 + 14 * (i + 1) as i16);
+            for (i, item) in v.iter().enumerate() {
+                text_draw(&conn, screen, win_id, 10, 14 * (i + 1) as i16, item)?;
+            }
+            conn.flush()?;
         }
-
-        conn.flush()?;
-        // sleep(Duration::from_secs(refresh_min * 60));
     }
 }
